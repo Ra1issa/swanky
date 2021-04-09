@@ -12,7 +12,7 @@
 //!
 
 mod cuckoo;
-mod errors;
+pub mod errors;
 mod psi;
 pub mod utils;
 

@@ -374,43 +374,41 @@ pub fn generate_deltas(primes: &[u16]) -> HashMap<u16, Wire> {
     deltas
 }
 
-//Assumes payloads are up to 64bit long i.e 8 bytes
-fn block512_to_crt(b: Block512) -> Vec<u16> {
-    let b_val = b.prefix(8);
-
+fn block512_to_crt(b: Block512, size: usize) -> Vec<u16> {
+    let q = primes_with_width(size as u32);
+    let b_val = b.prefix(size/8);
     let mut b_128 = [0 as u8; 16];
-
-    // Loop over the 8 bytes of 64b b_val
-    for i in 0..8 {
+    for i in 0..size/8{
         b_128[i] = b_val[i];
     }
-
-    let q = primes_with_width(64);
     let b_crt = crt(u128::from_le_bytes(b_128), &q);
     b_crt
 }
 
 //Assumes payloads are up to 64bit long
 // WRITE assumption more
-pub fn mask_payload_crt<RNG: rand::Rng + Sized>(
+pub fn mask_payload_crt(
     x: Block512,
     y: Block512,
-    rng: &mut RNG,
 ) -> Block512 {
-    let x_crt = block512_to_crt(x);
-    let y_crt = block512_to_crt(y);
-    let q = primes_with_width(64);
+    let size : usize= 64;
+    let x_crt = block512_to_crt(x, size);
+    let y_crt = block512_to_crt(y, size);
+
+    let q = primes_with_width(size as u32);
+
     let mut res_crt = Vec::new();
     for i in 0..q.len() {
         res_crt.push((x_crt[i] + y_crt[i]) % q[i]);
     }
     let res = crt_inv(&res_crt, &q).to_le_bytes();
+    let y_bytes = y.prefix(size);
     let mut block = [0 as u8; 64];
-    for i in 0..64 {
-        if i < res.len() {
+    for i in 0..size {
+        if i < size/8{
             block[i] = res[i];
         } else {
-            block[i] = rng.gen::<u8>(); // TODO: mod rest of prime
+            block[i] = y_bytes[i]; // TODO: mod rest of prime
         }
     }
     Block512::from(block)

@@ -70,7 +70,7 @@ const HASH_SIZE: usize = 4;
 const PAYLOAD_SIZE: usize = 8;
 
 // How many u16's are used for the CRT representation
-const PAYLOAD_PRIME_SIZE: usize = 16;
+const PAYLOAD_PRIME_SIZE: usize = 10;
 const PAYLOAD_PRIME_SIZE_EXPANDED: usize = PAYLOAD_PRIME_SIZE + 1;
 
 // How many bytes to use to determine whether decryption succeeded in the send/recv
@@ -339,7 +339,6 @@ impl Sender {
                 payload[bin].push(fancy_garbling::util::mask_payload_crt(
                     *p,
                     ts_payload[bin],
-                    rng,
                 ));
                 bins.push(bin);
             }
@@ -757,7 +756,7 @@ impl ReceiverState {
         RNG: CryptoRng + RngCore + SeedableRng<Seed = Block>,
     {
         let my_input_bits = encode_inputs(&self.opprf_ids);
-        let my_opprf_output = encode_opprf_payload(&self.opprf_payloads);
+        let my_opprf_output = encode_payloads(&self.opprf_payloads);
         let my_payload_bits = encode_payloads(&self.payload);
 
         let mods_bits = vec![2; my_input_bits.len()];
@@ -834,33 +833,6 @@ fn encode_payloads(payload: &[Block512]) -> Vec<u16> {
             let b = blk.prefix(PAYLOAD_SIZE);
             let mut b_8 = [0 as u8; 16]; // beyond 64 bits padded with 0s
             for i in 0..PAYLOAD_SIZE {
-                b_8[i] = b[i];
-            }
-            fancy_garbling::util::crt(u128::from_le_bytes(b_8), &q)
-        })
-        .collect()
-}
-
-// Encoding OPPRF output associated with the payloads's before passing them to GC.
-// Note that we are only looking at PAYLOAD_PRIME_SIZE bytes of the opprf_payload:
-// the size we get after masking the payloads with the target vectors as CRT
-//
-// Assumes payloads are up to 64bit long:
-// The padding is not similarly generated to
-// the actual data: Notice how the masked data
-// is % with the correct modulus, while the
-// padded values are 0.
-// When swanky starts supporting larger primes,
-// the padded value should be random and modded with the
-// appropriate prime at its position
-fn encode_opprf_payload(opprf_ids: &[Block512]) -> Vec<u16> {
-    let q = &fancy_garbling::util::PRIMES[..PAYLOAD_PRIME_SIZE_EXPANDED];
-    opprf_ids
-        .iter()
-        .flat_map(|blk| {
-            let b = blk.prefix(PAYLOAD_PRIME_SIZE);
-            let mut b_8 = [0 as u8; 16];
-            for i in 0..PAYLOAD_PRIME_SIZE {
                 b_8[i] = b[i];
             }
             fancy_garbling::util::crt(u128::from_le_bytes(b_8), &q)
