@@ -70,7 +70,7 @@ const HASH_SIZE: usize = 4;
 const PAYLOAD_SIZE: usize = 8;
 
 // How many u16's are used for the CRT representation
-const PAYLOAD_PRIME_SIZE: usize = 10;
+const PAYLOAD_PRIME_SIZE: usize = 16;
 const PAYLOAD_PRIME_SIZE_EXPANDED: usize = PAYLOAD_PRIME_SIZE + 1;
 
 // How many bytes to use to determine whether decryption succeeded in the send/recv
@@ -300,6 +300,8 @@ impl Sender {
         }
 
         let weighted_mean = gb.crt_div(&acc, &sum_weights).unwrap();
+        gb.outputs(&acc.wires().to_vec()).unwrap();
+        gb.outputs(&sum_weights.wires().to_vec()).unwrap();
         gb.outputs(&weighted_mean.wires().to_vec()).unwrap();
         Ok(())
     }
@@ -631,6 +633,22 @@ impl Receiver {
         }
 
         let weighted_mean = ev.crt_div(&acc, &sum_weights).unwrap();
+
+        let acc_outs = ev
+            .outputs(&acc.wires().to_vec())
+            .unwrap()
+            .expect("evaluator should produce outputs");
+        let acc = fancy_garbling::util::crt_inv(&acc_outs, &qs);
+
+        println!("acc{}", acc);
+
+        let sum_weights_outs = ev
+            .outputs(&sum_weights.wires().to_vec())
+            .unwrap()
+            .expect("evaluator should produce outputs");
+        let sum_weights = fancy_garbling::util::crt_inv(&sum_weights_outs, &qs);
+
+        println!("sum_weights{}", sum_weights);
 
         let weighted_mean_outs = ev
             .outputs(&weighted_mean.wires().to_vec())
