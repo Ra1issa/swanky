@@ -300,8 +300,6 @@ impl Sender {
         }
 
         let weighted_mean = gb.crt_div(&acc, &sum_weights).unwrap();
-        gb.outputs(&acc.wires().to_vec()).unwrap();
-        gb.outputs(&sum_weights.wires().to_vec()).unwrap();
         gb.outputs(&weighted_mean.wires().to_vec()).unwrap();
         Ok(())
     }
@@ -634,22 +632,6 @@ impl Receiver {
 
         let weighted_mean = ev.crt_div(&acc, &sum_weights).unwrap();
 
-        let acc_outs = ev
-            .outputs(&acc.wires().to_vec())
-            .unwrap()
-            .expect("evaluator should produce outputs");
-        let acc = fancy_garbling::util::crt_inv(&acc_outs, &qs);
-
-        println!("acc{}", acc);
-
-        let sum_weights_outs = ev
-            .outputs(&sum_weights.wires().to_vec())
-            .unwrap()
-            .expect("evaluator should produce outputs");
-        let sum_weights = fancy_garbling::util::crt_inv(&sum_weights_outs, &qs);
-
-        println!("sum_weights{}", sum_weights);
-
         let weighted_mean_outs = ev
             .outputs(&weighted_mean.wires().to_vec())
             .unwrap()
@@ -875,58 +857,93 @@ fn fancy_compute_payload_aggregate<F: fancy_garbling::FancyReveal + Fancy>(
     let qs = &fancy_garbling::util::PRIMES[..PAYLOAD_PRIME_SIZE_EXPANDED];
     let q = fancy_garbling::util::product(&qs);
 
-    let eqs = sender_inputs
-        .chunks(HASH_SIZE * 8)
-        .zip_eq(receiver_inputs.chunks(HASH_SIZE * 8))
-        .map(|(xs, ys)| {
-            f.eq_bundles(
-                &BinaryBundle::new(xs.to_vec()),
-                &BinaryBundle::new(ys.to_vec()),
-            )
-        })
-        .collect::<Result<Vec<F::Item>, F::Error>>()?;
+    let eqs = check_equality(f, sender_inputs, receiver_inputs)?;
+    let reconstructed_payload = unmask(f, sender_payloads, receiver_masks)?;
+    let weighted_payloads = weigh(f, reconstructed_payload.clone(), receiver_payloads)?;
 
-    let reconstructed_payload = sender_payloads
-        .chunks(PAYLOAD_PRIME_SIZE_EXPANDED)
-        .zip_eq(receiver_masks.chunks(PAYLOAD_PRIME_SIZE_EXPANDED))
-        .map(|(xp, tp)| {
-            let b_x = Bundle::new(xp.to_vec());
-            let b_t = Bundle::new(tp.to_vec());
-            f.crt_sub(&CrtBundle::from(b_t), &CrtBundle::from(b_x))
-        })
-        .collect::<Result<Vec<CrtBundle<F::Item>>, F::Error>>()?;
-
-    let mut weighted_payloads = Vec::new();
-    for it in reconstructed_payload
-        .clone()
-        .into_iter()
-        .zip_eq(receiver_payloads.chunks(PAYLOAD_PRIME_SIZE_EXPANDED))
-    {
-        let (ps, pr) = it;
-        let weighted = f.crt_mul(&ps, &CrtBundle::new(pr.to_vec()))?;
-        weighted_payloads.push(weighted);
-    }
 
     assert_eq!(eqs.len(), weighted_payloads.len());
 
     let mut acc = f.crt_constant_bundle(0, q)?;
     let mut sum_weights = f.crt_constant_bundle(0, q)?;
-    let one = f.crt_constant_bundle(1, q)?;
-
     for (i, b) in eqs.iter().enumerate() {
-        let b_ws = one
-            .iter()
-            .map(|w| f.mul(w, &b))
-            .collect::<Result<Vec<F::Item>, F::Error>>()?;
-        let b_crt = CrtBundle::new(b_ws);
+        let b_crt = expand_bit(f, b)?;
 
         let mux = f.crt_mul(&b_crt, &weighted_payloads[i])?;
-        let mux_sum_weights = f.crt_mul(&b_crt, &reconstructed_payload[i])?;
         acc = f.crt_add(&acc, &mux)?;
+        let mux_sum_weights = f.crt_mul(&b_crt, &reconstructed_payload[i])?;
         sum_weights = f.crt_add(&sum_weights, &mux_sum_weights)?;
     }
     Ok((acc, sum_weights))
 }
+
+fn check_equality<F: fancy_garbling::FancyReveal + Fancy>(
+    f: &mut F,
+    x: &[F::Item],
+    y: &[F::Item],
+) -> Result<Vec<F::Item>, F::Error> {
+    x.chunks(HASH_SIZE * 8)
+    .zip_eq(y.chunks(HASH_SIZE * 8))
+    .map(|(xs, ys)| {
+        f.eq_bundles(
+            &BinaryBundle::new(xs.to_vec()),
+            &BinaryBundle::new(ys.to_vec()),
+        )
+    })
+    .collect::<Result<Vec<F::Item>, F::Error>>()
+}
+
+fn unmask<F: fancy_garbling::FancyReveal + Fancy>(
+    f: &mut F,
+    payload: &[F::Item],
+    mask: &[F::Item],
+) -> Result<Vec<CrtBundle<F::Item>>, F::Error>{
+    payload
+        .chunks(PAYLOAD_PRIME_SIZE_EXPANDED)
+        .zip_eq(mask.chunks(PAYLOAD_PRIME_SIZE_EXPANDED))
+        .map(|(xp, tp)| {
+            let b_x = Bundle::new(xp.to_vec());
+            let b_t = Bundle::new(tp.to_vec());
+            f.crt_sub(&CrtBundle::from(b_t), &CrtBundle::from(b_x))
+        })
+        .collect::<Result<Vec<CrtBundle<F::Item>>, F::Error>>()
+}
+
+
+fn weigh<F: fancy_garbling::FancyReveal + Fancy>(
+    f: &mut F,
+    x: Vec<CrtBundle<F::Item>>,
+    y: &[F::Item],
+) -> Result<Vec<CrtBundle<F::Item>>, F::Error>{
+    x.clone()
+    .into_iter()
+    .zip_eq(y.chunks(PAYLOAD_PRIME_SIZE_EXPANDED))
+    .map(|(ps, pr)|
+        f.crt_mul(
+            &ps,
+            &CrtBundle::new(pr.to_vec()),
+        )
+    )
+    .collect::<Result<Vec<CrtBundle<F::Item>>, F::Error>>()
+}
+
+fn expand_bit<F: fancy_garbling::FancyReveal + Fancy>(
+        f: &mut F,
+        b: &F::Item,
+    )-> Result<CrtBundle<F::Item>, F::Error> {
+    let qs = &fancy_garbling::util::PRIMES[..PAYLOAD_PRIME_SIZE_EXPANDED];
+    let q = fancy_garbling::util::product(&qs);
+
+    let one = f.crt_constant_bundle(1, q)?;
+    let b_ws = one
+        .iter()
+        .map(|w| f.mul(w, &b))
+        .collect::<Result<Vec<_>, _>>()?;
+    let b_crt = CrtBundle::new(b_ws);
+    Ok(b_crt)
+}
+
+
 
 impl SemiHonest for Sender {}
 impl SemiHonest for Receiver {}
@@ -986,8 +1003,8 @@ mod tests {
 
     #[test]
     fn test_psty_payload() {
-        let set_size_sx: usize = 1 << 10;
-        let set_size_rx: usize = 1 << 10;
+        let set_size_sx: usize = 1 << 6;
+        let set_size_rx: usize = 1 << 6;
 
         let weight_max: u64 = 100000;
         let payload_max: u64 = 100000;
@@ -1033,18 +1050,17 @@ mod tests {
         let weighted_mean = psi
             .full_protocol(&receiver_inputs, &payloads, &mut channel, &mut rng)
             .unwrap();
-
         assert_eq!(result_in_clear, weighted_mean);
     }
 
     #[test]
-    fn test_psty_payload_large() {
-        let set_size_sx: usize = 1 << 11;
+    fn test_psty_large() {
         let set_size_rx: usize = 1 << 11;
+        let set_size_sx: usize = 1 << 11;
 
-        let weight_max: u64 = 100000;
+        let weight_max: u64 = 1000000;
         let payload_max: u64 = 100000;
-        let megasize = 1 << 10;
+        let megasize = 10000;
 
         let mut rng = AesRng::new();
 
