@@ -3,7 +3,6 @@
 // This file is part of `popsicle`.
 // Copyright © 2019 Galois, Inc.
 // See LICENSE for licensing information.
-
 pub mod kmprt;
 
 #[cfg(feature = "psty")]
@@ -26,10 +25,10 @@ pub type ExtendedReceiver = psty::Receiver;
 
 #[cfg(feature = "psty_payload")]
 /// Private set intersection with associated payloads sender.
-pub type SenderPayload = psty_payload::Sender;
+pub type SenderPayload = psty_payload::psty_payload::Sender;
 #[cfg(feature = "psty_payload")]
 /// Private set intersection with associated payloads receiver.
-pub type ReceiverPayload = psty_payload::Receiver;
+pub type ReceiverPayload = psty_payload::psty_payload::Receiver;
 
 /// Multi-party private set intersection sender.
 pub type MultiPartySender = kmprt::Sender;
