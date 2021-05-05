@@ -9,6 +9,8 @@ use crate::{
 use fancy_garbling::{
     twopac::semihonest::{Evaluator, Garbler},
     CrtGadgets, Fancy,
+    CrtBundle,
+    Wire,
 };
 
 use ocelot::{
@@ -55,8 +57,10 @@ impl Sender {
 
         let mut megabins = self
             .bucketize_data_large(table, payloads, payload_size, channel, rng)?;
-        let _ = self
+        let (num, denom) = self
             .compute_circuit(p, payload_size, &mut megabins, &path_deltas, channel, rng).unwrap();
+        let _ = self
+            .join_circuits(&num, &denom, &path_deltas, channel, rng).unwrap();
 
         Ok(())
     }
@@ -115,7 +119,7 @@ impl Sender {
         channel: &mut C,
         rng: &mut RNG,
     ) -> Result<
-        (),
+        (Vec<CrtBundle<Wire>>,  Vec<CrtBundle<Wire>>),
         Error,
     > {
         let mut gb =
@@ -142,14 +146,37 @@ impl Sender {
                 start.elapsed().unwrap().as_millis()
             );
         }
-        let num = circuits::sum_crt(&mut gb, &weighted_values).unwrap();
-        let denom = circuits::sum_crt(&mut gb, &sum_weights).unwrap();
+
+        Ok((weighted_values, sum_weights))
+    }
+    pub fn join_circuits<
+        C: AbstractChannel,
+        RNG: RngCore + CryptoRng + SeedableRng<Seed = Block>,
+    >(
+        &mut self,
+        weighted_values: &[CrtBundle<Wire>],
+        sum_weights: &[CrtBundle<Wire>],
+        path_deltas: &str,
+        channel: &mut C,
+        rng: &mut RNG,
+    ) -> Result<
+        (),
+        Error,
+    > {
+        let mut gb =
+            Garbler::<C, RNG, OtSender>::new(channel.clone(), RNG::from_seed(rng.gen())).unwrap();
+        let _ = gb.load_deltas(path_deltas);
+
+        let num = circuits::sum_crt(&mut gb, weighted_values).unwrap();
+        let denom = circuits::sum_crt(&mut gb, sum_weights).unwrap();
+
         let weighted_mean = gb.crt_div(&num, &denom).unwrap();
 
         gb.outputs(&weighted_mean.wires().to_vec()).unwrap();
 
         Ok(())
     }
+
 }
 
 impl Receiver {
@@ -173,8 +200,10 @@ impl Receiver {
 
         let mut megabins =self.
                 bucketize_data_large(table, payloads, megasize, channel, rng)?;
-        let weighted_mean =self.
+        let (num, denom) =self.
                 compute_circuit(p, payload_size, &mut megabins, channel, rng).unwrap();
+        let weighted_mean =self.
+                join_circuits(p, &num, &denom, channel, rng).unwrap();
 
         Ok(weighted_mean)
     }
@@ -235,7 +264,7 @@ impl Receiver {
         channel: &mut C,
         rng: &mut RNG,
     ) -> Result<
-        u128,
+        (Vec<CrtBundle<Wire>>,  Vec<CrtBundle<Wire>>),
         Error,
     > {
         let mut ev =
@@ -255,14 +284,33 @@ impl Receiver {
             let (weighted_value, sum_weight) = state.build_and_compute_circuit(&mut ev, p, payload_size/8).unwrap();
             weighted_values.push(weighted_value);
             sum_weights.push(sum_weight);
-
             println!(
                 "Sender :: Computation time: {} ms",
                 start.elapsed().unwrap().as_millis()
             );
         }
-        let num = circuits::sum_crt(&mut ev, &weighted_values).unwrap();
-        let denom = circuits::sum_crt(&mut ev, &sum_weights).unwrap();
+        Ok((weighted_values, sum_weights))
+    }
+    pub fn join_circuits<
+    C: AbstractChannel,
+    RNG: RngCore + CryptoRng + SeedableRng<Seed = Block>,
+    >(
+        &mut self,
+        p: usize,
+        weighted_values: &[CrtBundle<Wire>],
+        sum_weights: &[CrtBundle<Wire>],
+        channel: &mut C,
+        rng: &mut RNG,
+    ) -> Result<
+        u128,
+        Error,
+    > {
+        let mut ev =
+            Evaluator::<C, RNG, OtReceiver>::new(channel.clone(), RNG::from_seed(rng.gen()))
+                .unwrap();
+
+        let num = circuits::sum_crt(&mut ev, weighted_values).unwrap();
+        let denom = circuits::sum_crt(&mut ev, sum_weights).unwrap();
 
         let weighted_mean = ev.crt_div(&num, &denom).unwrap();
         let weighted_mean_outs = ev

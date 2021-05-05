@@ -9,7 +9,7 @@ mod tests {
     use super::*;
     use crate::psty_utils::util::int_vec_block512;
     use crate::utils::rand_u64_vec;
-    use fancy_garbling::util::generate_deltas;
+    use fancy_garbling::Wire;
     use rand::{prelude::SliceRandom, thread_rng};
     use scuttlebutt::{AesRng, Block512, Channel, SymChannel};
     use std::{
@@ -126,6 +126,14 @@ mod tests {
         assert_eq!(result_in_clear, weighted_mean);
     }
 
+    pub fn generate_deltas() -> HashMap<u16, Wire> {
+        let mut deltas = HashMap::new();
+        let mut rng = rand::thread_rng();
+        for q in 2..255{
+            deltas.insert(q, Wire::rand_delta(&mut rng, q));
+        }
+        deltas
+    }
     // use crate::psty_utils::psty_large;
     #[test]
     fn test_psty_large() {
@@ -151,10 +159,8 @@ mod tests {
             &weights.borrow(),
         );
         println!("result_in_clear {:?}", result_in_clear);
-        let p = &fancy_garbling::util::primes_with_width(payload_size as u32).len() + 1;
-        let qs = &fancy_garbling::util::PRIMES[..p];
 
-        let deltas = generate_deltas(&qs);
+        let deltas = generate_deltas();
         let deltas_json = serde_json::to_string(&deltas).unwrap();
 
         let path_delta = "./.deltas.txt".to_owned();
