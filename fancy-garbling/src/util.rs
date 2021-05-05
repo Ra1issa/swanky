@@ -12,7 +12,7 @@ use crate::Wire;
 #[cfg(feature = "nightly")]
 use core::arch::x86_64::*;
 use itertools::Itertools;
-use scuttlebutt::{Block, Block512};
+use scuttlebutt::Block;
 use std::collections::HashMap;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -372,46 +372,6 @@ pub fn generate_deltas(primes: &[u16]) -> HashMap<u16, Wire> {
         deltas.insert(*q, Wire::rand_delta(&mut rng, *q));
     }
     deltas
-}
-
-fn block512_to_crt(b: Block512, size: usize) -> Vec<u16> {
-    let q = primes_with_width(size as u32);
-    let b_val = b.prefix(size/8);
-    let mut b_128 = [0 as u8; 16];
-    for i in 0..size/8{
-        b_128[i] = b_val[i];
-    }
-    let b_crt = crt(u128::from_le_bytes(b_128), &q);
-    b_crt
-}
-
-//Assumes payloads are up to 64bit long
-// WRITE assumption more
-pub fn mask_payload_crt(
-    x: Block512,
-    y: Block512,
-) -> Block512 {
-    let size : usize= 64;
-    let x_crt = block512_to_crt(x, size);
-    let y_crt = block512_to_crt(y, size);
-
-    let q = primes_with_width(size as u32);
-
-    let mut res_crt = Vec::new();
-    for i in 0..q.len() {
-        res_crt.push((x_crt[i] + y_crt[i]) % q[i]);
-    }
-    let res = crt_inv(&res_crt, &q).to_le_bytes();
-    let y_bytes = y.prefix(size);
-    let mut block = [0 as u8; 64];
-    for i in 0..size {
-        if i < size/8{
-            block[i] = res[i];
-        } else {
-            block[i] = y_bytes[i]; // TODO: mod rest of prime
-        }
-    }
-    Block512::from(block)
 }
 
 /// Extra Rng functionality, useful for `fancy-garbling`.
