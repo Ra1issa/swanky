@@ -32,7 +32,7 @@ pub struct SenderMegabins{
 /// State of the receiver.
 #[derive(Serialize, Deserialize)]
 pub struct ReceiverMegabins{
-    pub(crate) states: Vec<ReceiverState>,
+    pub states: Vec<ReceiverState>,
     pub nmegabins: usize,
 }
 
