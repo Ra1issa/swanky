@@ -42,11 +42,6 @@ use rand::{CryptoRng, Rng, RngCore, SeedableRng};
 use scuttlebutt::{AbstractChannel, Block, Block512};
 use std::fmt::Debug;
 
-use std::{
-    fs::File,
-    io::{BufRead, BufReader},
-};
-
 const NHASHES: usize = 3;
 // How many bytes of the hash to use for the equality tests. This affects
 // correctness, with a lower value increasing the likelihood of a false
@@ -437,63 +432,6 @@ impl ReceiverState {
             fancy_compute_payload_aggregate(ev,&x, &y,&x_payload, &y_payload, &masks,p).unwrap();
         Ok((outs, sum_weights))
     }
-}
-
-
-// Encoding ID's before passing them to GC.
-// Note that we are only looking at HASH_SIZE bytes
-// of the IDs.
-fn encode_inputs(opprf_ids: &[Block512]) -> Vec<u16> {
-    opprf_ids
-        .iter()
-        .flat_map(|blk| {
-            blk.prefix(HASH_SIZE)
-                .iter()
-                .flat_map(|byte| (0..8).map(|i| u16::from((byte >> i) & 1_u8)).collect_vec())
-        })
-        .collect()
-}
-
-// Encoding Payloads's before passing them to GC.
-// Note that we are only looking at PAYLOAD_SIZE bytes
-// of the payloads.
-// + similar comment to encode_opprf_payload
-fn encode_payloads(payload: &[Block512]) -> Vec<u16> {
-    let q = &fancy_garbling::util::PRIMES[..PAYLOAD_PRIME_SIZE_EXPANDED];
-    payload
-        .iter()
-        .flat_map(|blk| {
-            let b = blk.prefix(PAYLOAD_SIZE);
-            let mut b_8 = [0_u8; 16]; // beyond 64 bits padded with 0s
-            b_8[..PAYLOAD_SIZE].clone_from_slice(&b[..PAYLOAD_SIZE]);
-            fancy_garbling::util::crt(u128::from_le_bytes(b_8), &q)
-        })
-        .collect()
-}
-
-// Encoding OPPRF output associated with the payloads's before passing them to GC.
-// Note that we are only looking at PAYLOAD_PRIME_SIZE bytes of the opprf_payload:
-// the size we get after masking the payloads with the target vectors as CRT
-//
-// Assumes payloads are up to 64bit long:
-// The padding is not similarly generated to
-// the actual data: Notice how the masked data
-// is % with the correct modulus, while the
-// padded values are 0.
-// When swanky starts supporting larger primes,
-// the padded value should be random and modded with the
-// appropriate prime at its position
-fn encode_opprf_payload(opprf_ids: &[Block512]) -> Vec<u16> {
-    let q = &fancy_garbling::util::PRIMES[..PAYLOAD_PRIME_SIZE_EXPANDED];
-    opprf_ids
-        .iter()
-        .flat_map(|blk| {
-            let b = blk.prefix(PAYLOAD_PRIME_SIZE);
-            let mut b_8 = [0_u8; 16];
-            b_8[..PAYLOAD_SIZE].clone_from_slice(&b[..PAYLOAD_SIZE]);
-            fancy_garbling::util::crt(u128::from_le_bytes(b_8), &q)
-        })
-        .collect()
 }
 
 /// Fancy function to compute a weighted average for matching ID's
