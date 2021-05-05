@@ -18,7 +18,7 @@ use scuttlebutt::{Aes128, Block};
 use std::fmt::Debug;
 
 #[derive(Clone, Debug)]
-pub(crate) struct CuckooItem {
+pub struct CuckooItem {
     // The actual value.
     pub(crate) entry: Block,
     // The input index associated with the entry.

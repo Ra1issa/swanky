@@ -13,26 +13,23 @@ publish = false
 [lib]
 
 [features]
-nightly = ["rand/nightly", "scuttlebutt/nightly", "ocelot/nightly", "ocelot/nightly"]
-fancy = ["fancy-garbling"]
-psty = ["fancy", "openssl"]
-psty_payload = ["fancy","serde", "serde_json", "fancy-garbling/serde1"]
+nightly = ["scuttlebutt/nightly", "ocelot/nightly", "ocelot/nightly"]
+psty = ["fancy-garbling", "openssl"]
+psty_payload = ["fancy-garbling", "serde", "serde_json", "fancy-garbling/serde1"]
 
 [dependencies]
 ocelot         = { path = "../ocelot" }
-scuttlebutt    = { path = "../scuttlebutt",  features = ["serde1"]}
-itertools      = "0.8"
+scuttlebutt    = { path = "../scuttlebutt" }
+itertools      = "0.10.0"
 rand           = "0.7"
-sha2           = "0.8"
+sha2           = "0.9.3"
+fancy-garbling = { path = "../fancy-garbling", optional = true }
+openssl        = { version = "0.10.32", optional = true }
 serde          = {version = "1.0.117", features = ["derive"], optional = true }
 serde_json     = {version = "1.0.59", optional = true }
-fancy-garbling = { path = "../fancy-garbling", features = ["serde1"], optional = true }
-openssl        = { version = "0.10.28", optional = true }
 
 [dev-dependencies]
-criterion  = "0.2.11"
-clap       = "2.33.0"
-serde      = { version = "1.0.92", features = ["derive"] }
+criterion  = "0.3.4"
 
 [[bench]]
 name = "psz"

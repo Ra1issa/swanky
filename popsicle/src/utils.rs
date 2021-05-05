@@ -4,19 +4,16 @@
 // Copyright © 2019 Galois, Inc.
 // See LICENSE for licensing information.
 
-use rand::{seq::SliceRandom, thread_rng, CryptoRng, Rng};
-use scuttlebutt::{AesHash, Block, Block512};
-use sha2::{Digest, Sha256};
-use std::{
-    fs::File,
-    io::{BufRead, BufReader},
-};
+//! Util mostly in support of cuckoo hashing.
 
-// Compress an arbitrary vector into a 128-bit chunk, leaving the final 8-bits
-// as zero. We need to leave 8 bits free in order to add in the hash index when
-// running the OPRF (cf. <https://eprint.iacr.org/2016/799>, §5.2).
+use rand::{CryptoRng, Rng};
+use scuttlebutt::{AesHash, Block};
+use sha2::{Digest, Sha256};
+
+/// Compress an arbitrary vector into a 128-bit chunk, leaving the final 8-bits
+/// as zero. We need to leave 8 bits free in order to add in the hash index when
+/// running the OPRF (cf. <https://eprint.iacr.org/2016/799>, §5.2).
 pub fn compress_and_hash_inputs(inputs: &[Vec<u8>], key: Block) -> Vec<Block> {
-    let mut hasher = Sha256::new(); // XXX can we do better than using SHA-256?
     let aes = AesHash::new(key);
     let mask = Block::from(0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FF00);
     inputs
@@ -29,8 +26,9 @@ pub fn compress_and_hash_inputs(inputs: &[Vec<u8>], key: Block) -> Vec<Block> {
                 digest[0..input.len()].copy_from_slice(input);
             } else {
                 // Hash `input` first.
-                hasher.input(input);
-                let h = hasher.result_reset();
+                let mut hasher = Sha256::new(); // XXX can we do better than using SHA-256?
+                hasher.update(input);
+                let h = hasher.finalize();
                 digest[0..16].copy_from_slice(&h[0..16]);
             }
             let block = aes.cr_hash(Block::from(i as u128), Block::from(digest));
@@ -39,80 +37,22 @@ pub fn compress_and_hash_inputs(inputs: &[Vec<u8>], key: Block) -> Vec<Block> {
         .collect::<Vec<Block>>()
 }
 
-pub fn int_vec_block512(values: Vec<u64>) -> Vec<Block512> {
-    values
-        .into_iter()
-        .map(|item| {
-            let value_bytes = item.to_le_bytes();
-            let mut res_block = [0 as u8; 64];
-            for i in 0..8 {
-                res_block[i] = value_bytes[i];
-            }
-            Block512::from(res_block)
-        })
-        .collect()
-}
-
-pub fn parse_files(
-    id_position: usize,
-    payload_position: usize,
-    path: &str,
-) -> (Vec<Vec<u8>>, Vec<Block512>) {
-    let data = File::open(path).unwrap();
-
-    let buffer = BufReader::new(data).lines();
-
-    let mut ids = Vec::new();
-    let mut payloads = Vec::new();
-
-    let mut cnt = 0;
-    for line in buffer.enumerate() {
-        let line_split = line
-            .1
-            .unwrap()
-            .split(",")
-            .map(|item| item.to_string())
-            .collect::<Vec<String>>();
-        if cnt == 0 {
-            cnt = cnt + 1;
-        } else {
-            ids.push(
-                line_split[id_position]
-                    .parse::<u64>()
-                    .unwrap()
-                    .to_le_bytes()
-                    .to_vec(),
-            );
-            payloads.push(line_split[payload_position].parse::<u64>().unwrap());
-        }
-    }
-    (ids, int_vec_block512(payloads))
-}
-
-#[allow(dead_code)] // used in tests
+#[allow(dead_code)]
+/// used in tests
 pub fn rand_vec<RNG: CryptoRng + Rng>(n: usize, rng: &mut RNG) -> Vec<u8> {
     (0..n).map(|_| rng.gen()).collect()
 }
 
-#[allow(dead_code)] // used in tests
+#[allow(dead_code)]
+/// used in tests
 pub fn rand_vec_vec<RNG: CryptoRng + Rng>(n: usize, m: usize, rng: &mut RNG) -> Vec<Vec<u8>> {
     (0..n).map(|_| rand_vec(m, rng)).collect()
 }
-#[allow(dead_code)]
-pub fn rand_u64_vec<RNG: CryptoRng + Rng>(n: usize, modulus: u64, rng: &mut RNG) -> Vec<u64> {
-    (0..n).map(|_| rng.gen::<u64>() % modulus).collect()
-}
 
 #[allow(dead_code)]
-pub fn enum_ids_shuffled(n: usize, id_size: usize) -> Vec<Vec<u8>> {
-    let mut vec: Vec<u64> = (0..n as u64).collect();
-    vec.shuffle(&mut thread_rng());
-    let mut ids = Vec::with_capacity(n);
-    for i in 0..n {
-        let v: Vec<u8> = vec[i].to_le_bytes().iter().take(id_size).cloned().collect();
-        ids.push(v);
-    }
-    ids
+/// used in tests
+pub fn rand_u64_vec<RNG: CryptoRng + Rng>(n: usize, modulus: u64, rng: &mut RNG) -> Vec<u64> {
+    (0..n).map(|_| rng.gen::<u64>() % modulus).collect()
 }
 
 #[cfg(test)]
