@@ -10,7 +10,7 @@ use fancy_garbling::{
 use itertools::Itertools;
 
 
-pub fn check_equality<F: fancy_garbling::FancyReveal + Fancy>(
+pub fn check_equality<F: Fancy>(
     f: &mut F,
     x: &[F::Item],
     y: &[F::Item],
@@ -27,7 +27,7 @@ pub fn check_equality<F: fancy_garbling::FancyReveal + Fancy>(
     .collect::<Result<Vec<F::Item>, F::Error>>()
 }
 
-pub fn unmask<F: fancy_garbling::FancyReveal + Fancy>(
+pub fn unmask<F: Fancy>(
     f: &mut F,
     payload: &[F::Item],
     mask: &[F::Item],
@@ -45,9 +45,9 @@ pub fn unmask<F: fancy_garbling::FancyReveal + Fancy>(
 }
 
 
-pub fn weigh<F: fancy_garbling::FancyReveal + Fancy>(
+pub fn weigh<F: Fancy>(
     f: &mut F,
-    x: Vec<CrtBundle<F::Item>>,
+    x: &[CrtBundle<F::Item>],
     y: &[F::Item],
     size: usize,
 ) -> Result<Vec<CrtBundle<F::Item>>, F::Error>{
@@ -63,11 +63,11 @@ pub fn weigh<F: fancy_garbling::FancyReveal + Fancy>(
     .collect::<Result<Vec<CrtBundle<F::Item>>, F::Error>>()
 }
 
-pub fn expand_bit<F: fancy_garbling::FancyReveal + Fancy>(
+pub fn expand_bit<F: Fancy>(
         f: &mut F,
         b: &F::Item,
         size: usize,
-    )-> Result<CrtBundle<F::Item>, F::Error> {
+)-> Result<CrtBundle<F::Item>, F::Error> {
     let qs = &fancy_garbling::util::PRIMES[..size];
     let q = fancy_garbling::util::product(&qs);
 
@@ -78,4 +78,16 @@ pub fn expand_bit<F: fancy_garbling::FancyReveal + Fancy>(
         .collect::<Result<Vec<_>, _>>()?;
     let b_crt = CrtBundle::new(b_ws);
     Ok(b_crt)
+}
+
+pub fn sum_crt<F: Fancy>(
+    f: &mut F,
+    values: &[CrtBundle<F::Item>],
+ )-> Result<CrtBundle<F::Item>, F::Error> {
+    let q = values[0].composite_modulus();
+    let mut acc = f.crt_constant_bundle(0, q)?;
+    for v in values{
+        acc = f.crt_add(&acc, &v).unwrap();
+    }
+    Ok(acc)
 }
