@@ -22,11 +22,13 @@ use std::time::SystemTime;
 /// State of the sender.
 pub struct SenderMegabins{
     pub(crate) states: Vec<SenderState>,
+    pub nmegabins: usize,
 }
 
 /// State of the receiver.
 pub struct ReceiverMegabins{
     pub(crate) states: Vec<ReceiverState>,
+    pub nmegabins: usize,
 }
 
 impl Sender {
@@ -77,6 +79,7 @@ impl Sender {
         let payload: Vec<Vec<Vec<Block512>>> = util::split_into_megabins(state.payload, megasize);
         let mut megabins = SenderMegabins{
             states: Vec::new(),
+            nmegabins,
         };
 
         for i in 0..nmegabins{
@@ -197,7 +200,8 @@ impl Receiver {
         channel.write_usize(nmegabins)?; // The number of megabins is sent out to the sender
         channel.flush()?;
 
-        let mut megabins = ReceiverMegabins{states: Vec::new()};
+        let mut megabins = ReceiverMegabins{states: Vec::new(),
+            nmegabins};
 
         for i in 0..nmegabins{
             let state = ReceiverState{
