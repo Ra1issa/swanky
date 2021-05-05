@@ -41,6 +41,7 @@ use ocelot::{
 use rand::{CryptoRng, Rng, RngCore, SeedableRng};
 use scuttlebutt::{AbstractChannel, Block, Block512};
 use std::fmt::Debug;
+use serde::{Serialize, Deserialize};
 
 const NHASHES: usize = 3;
 // How many bytes of the hash to use for the equality tests. This affects
@@ -62,7 +63,7 @@ pub struct Sender {
 }
 
 /// State of the sender.
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct SenderState {
     pub(crate) opprf_ids: Vec<Block512>,
     pub(crate) opprf_payloads: Vec<Block512>,
@@ -78,7 +79,7 @@ pub struct Receiver {
 }
 
 /// State of the receiver.
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct ReceiverState {
     pub(crate) opprf_ids: Vec<Block512>,
     pub(crate) opprf_payloads: Vec<Block512>,

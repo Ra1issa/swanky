@@ -18,14 +18,17 @@ use ocelot::{
 use rand::{CryptoRng, Rng, RngCore, SeedableRng};
 use scuttlebutt::{AbstractChannel, Block, Block512};
 use std::time::SystemTime;
+use serde::{Serialize, Deserialize};
 
 /// State of the sender.
+#[derive(Serialize, Deserialize)]
 pub struct SenderMegabins{
     pub(crate) states: Vec<SenderState>,
     pub nmegabins: usize,
 }
 
 /// State of the receiver.
+#[derive(Serialize, Deserialize)]
 pub struct ReceiverMegabins{
     pub(crate) states: Vec<ReceiverState>,
     pub nmegabins: usize,
