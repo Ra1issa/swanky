@@ -23,7 +23,7 @@ use serde::{Serialize, Deserialize};
 /// State of the sender.
 #[derive(Serialize, Deserialize)]
 pub struct SenderMegabins{
-    pub(crate) states: Vec<SenderState>,
+    pub states: Vec<SenderState>,
     pub nmegabins: usize,
 }
 
