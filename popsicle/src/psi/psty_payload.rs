@@ -172,7 +172,7 @@ impl Sender {
             if bins.iter().skip(1).all(|&x| x == bins[0]) {
                 table[bins[0]].push(rng.gen());
                 payload[bins[0]].push(rng.gen());
-                megasize[bins[0]] = megasize[bin] + 1;
+                megasize[bins[0]] = megasize[bins[0]] + 1;
             }
         }
 
