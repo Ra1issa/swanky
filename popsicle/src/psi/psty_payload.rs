@@ -151,6 +151,7 @@ impl Sender {
 
         let mut table = vec![Vec::new(); nbins];
         let mut payload = vec![Vec::new(); nbins];
+        let mut megasize = vec![0; nbins];
 
         let ts_id = (0..nbins).map(|_| rng.gen::<Block512>()).collect_vec();
         let ts_payload = (0..nbins).map(|_| rng.gen::<Block512>()).collect_vec();
@@ -163,6 +164,7 @@ impl Sender {
                 // In the case of a binary representation: the payload can be simply XORed
                 // with the target vector.
                 payload[bin].push(util::mask_payload_crt(*p, ts_payload[bin], payload_size));
+                megasize[bin] = megasize[bin] + 1;
                 bins.push(bin);
             }
             // if j = H1(y) = H2(y) for some y, then P2 adds a uniformly random element to
@@ -170,8 +172,11 @@ impl Sender {
             if bins.iter().skip(1).all(|&x| x == bins[0]) {
                 table[bins[0]].push(rng.gen());
                 payload[bins[0]].push(rng.gen());
+                megasize[bins[0]] = megasize[bin] + 1;
             }
         }
+
+        println!("MAX NUMBER OF ELEMENTS PER BIN{:?}", megasize.iter().max());
 
         let state = SenderState {
             opprf_ids: ts_id,
