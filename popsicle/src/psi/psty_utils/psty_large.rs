@@ -79,7 +79,7 @@ impl Sender {
         // receive cuckoo hash info from sender
         let megasize = channel.read_usize()?;
         let nmegabins = channel.read_usize()?;
-
+        println!("Total number of megabins {:?} of size {:?}", nmegabins, megasize);
         let ts_id: Vec<Vec<Block512>> = util::split_into_megabins(state.opprf_ids, megasize);
         let ts_payload: Vec<Vec<Block512>> = util::split_into_megabins(state.opprf_payloads, megasize);
         let table: Vec<Vec<Vec<Block>>> = util::split_into_megabins(state.table, megasize);
